@@ -9,5 +9,5 @@ if (!supabaseURL || !supabaseKey) {
     throw new AppError("SupabaseUrl ou SupabaseKey estão faltando.");
 }
 
-export const STORAGE_BUCKET = process.env.SUPABASE_BUCKET || "deppi-files";
+export const STORAGE_BUCKET = process.env.SUPABASE_BUCKET || "deppi-bucket";
 export const supabase = createClient(supabaseURL, supabaseKey);
