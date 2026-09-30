@@ -2,7 +2,7 @@ import { AppError } from "../errors/AppError";
 import { supabase } from "../lib/supabase";
 import crypto from "crypto";
 
-const BUCKET_IMAGEM = process.env.SUPABASE_BUCKET_IMAGEM || "deppi-imagem";
+const BUCKET_IMAGEM = process.env.SUPABASE_BUCKET_IMAGEM || "deppi-image";
 const BUCKET_DOCS = process.env.SUPABASE_BUCKET_DOCS || "deppi-docs";
 
 export const storageService = {
@@ -13,11 +13,11 @@ export const storageService = {
     bucket: string = BUCKET_DOCS,
     contentType?: string,
   ){
-    const nomeArquivo = `${crypto.randomUUID()}-$${nomeOriginal}`;
+    const nomeArquivo = `${crypto.randomUUID()}-${nomeOriginal}`;
     const caminho = `${subpasta}/${nomeArquivo}`;
 
     const { error } = await supabase.storage
-      .from("covers")
+      .from(bucket)
       .upload(caminho, buffer, {
         contentType: contentType,
       });
@@ -39,25 +39,25 @@ export const storageService = {
   },
 
   async remover(
-    caminho: string,
+    caminhoOuUrl: string,
     bucket: string = BUCKET_DOCS
   ) {
-    const url = new URL(caminho);
+    let caminhoStorage = caminhoOuUrl;
 
-    const marker = `/storage/v1/object/public/${bucket}/`;
+    if (caminhoOuUrl.startsWith("http://") || caminhoOuUrl.startsWith("https://")) {
+      const marker = `/storage/v1/object/public/${bucket}/`;
 
-    if (!url.pathname.includes(marker)) {
-      throw new AppError("URL do arquivo não pertence ao bucket esperado.");
+      if (!caminhoOuUrl.includes(marker)) {
+        throw new AppError("A URL do arquivo não pertence ao bucket informado.");
+      }
+
+      const partes = caminhoOuUrl.split(marker);
+      if (!partes[1]) {
+        throw new AppError("Não foi possível identificar o caminho do arquivo no Supabase.");
+      }
+
+      caminhoStorage = decodeURIComponent(partes[1]);
     }
-
-    const partes = url.pathname.split(marker);
-    const caminhoCodificado = partes[1];
-
-    if (!caminhoCodificado) {
-      throw new AppError("Não foi possível identificar o caminho do arquivo no Supabase.");
-    }
-
-    const caminhoStorage = decodeURIComponent(caminhoCodificado);
 
     const { error } = await supabase.storage
       .from(bucket)
