@@ -12,7 +12,7 @@ import { courseRoutes } from "./routes/course.routes.js";
 import instituicaoRoutes from "./routes/instituicao.routes.js";
 import documentoRouter from "./routes/documento.routes.js";
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(express.json());
 
@@ -68,7 +68,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 // ── Verifica se houve erro ─────────────────────────────────────────────────
 
 // ── Retorna porta do servidor ─────────────────────
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`Server Up: http://0.0.0.0:${PORT}`);
 });
 // ── Retorna porta do servidor ─────────────────────
