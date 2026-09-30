@@ -1,4 +1,5 @@
 import { prisma } from "../src/lib/prisma";
+import bcrypt from "bcryptjs";
 
 async function main() {
   const permissoes = [
@@ -144,33 +145,71 @@ async function main() {
 
   for (const c of cargos) {
     const permDeCargo = idPermissoes
-      .filter((p: any) => c.permissoes.includes(p.permissao))
-      .map((p: any) => ({ id: p.id }));
+      .filter((p) => c.permissoes.includes(p.permissao))
+      .map((p) => ({ id: p.id }));
 
-    await prisma.cargo.create({
-      data: {
+    await prisma.cargo.upsert({
+      where: { id: c.id },
+      update: { desc: c.desc, permissoes: { set: permDeCargo } },
+      create: {
         id: c.id,
         cargo: c.cargo as any,
         desc: c.desc,
-        permissoes: {
-          connect: permDeCargo,
-        },
+        permissoes: { connect: permDeCargo },
       },
     });
   }
 
-  await prisma.endereco.create({
-    data: {
-      rua: "Rua Teste",
-      bairro: "Centro",
-      numero: 123,
-      cep: 60000000,
-    },
+  const endereco = await prisma.endereco.findFirst() 
+  ?? await prisma.endereco.create({
+    data: { rua: "Rua Teste", bairro: "Centro", numero: 123, cep: 60000000 },
   });
+
+  const emailAdmin = "admin@deppi.local";
+
+  const adminExiste = await prisma.usuario.findUnique({
+    where: { emailInstitucional: emailAdmin },
+  });
+
+  if (!adminExiste) {
+    const senhaHash = await bcrypt.hash(process.env.ADMIN_SENHA ?? "trocar123", 10);
+
+    await prisma.usuario.create({
+      data: {
+        nome: "Administrador",
+        dataNasc: new Date("2000-01-01"),
+        naturalidade: "N/A",
+        emailInstitucional: emailAdmin,
+        emailSecundario: emailAdmin,
+        senha: senhaHash,
+        nomeMae: "N/A",
+        nomePai: "N/A",
+        sexo: "MASCULINO",
+        raca: "NAO_DECLARADO",
+
+        identidade: {
+          create: {
+            rg: "0000000000",
+            cpf: "00000000000",
+            orgaoEmissor: "N/A",
+            estado: "CE",
+            dataExpedicao: new Date("2000-01-01"),
+          },
+        },
+
+        endereco: { connect: { id: endereco.id } },
+        cargos: { connect: { id: 4 } }, // cargo ADMIN
+      },
+    });
+  }
 }
 
+
 main()
-  .catch(console.error)
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
   .finally(async () => {
     await prisma.$disconnect();
   });
