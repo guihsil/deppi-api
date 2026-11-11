@@ -27,7 +27,7 @@ export const updateCourse = z.object({
   dataFim: dataCursoSchema.optional(),
   horarioInicio: horarioCursoSchema.optional(),
   horarioFim: horarioCursoSchema.optional(),
-  status: z.string().optional(),
+  status: z.enum(["ANALISE", "ANDAMENTO", "CONCLUIDO", "FECHADO"]).optional(),
 });
 
 export type CreateCourseInput = z.infer<typeof createCourseSchema>;

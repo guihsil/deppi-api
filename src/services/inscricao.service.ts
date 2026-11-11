@@ -28,6 +28,10 @@ export async function criarInscricao(
     throw new AppError("Curso não encontrado", 404);
   }
 
+  if (curso.status !== "ANDAMENTO") {
+    throw new AppError("As inscrições para este curso não estão abertas", 400);
+  }
+
   const inscricaoExistente = await prisma.inscricao.findFirst({
     where: {
       fkAluno: aluno.id,

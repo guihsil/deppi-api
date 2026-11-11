@@ -1,10 +1,26 @@
 import { StatusCurso } from '../../generated/prisma/client';
 import { prisma } from '../lib/prisma';
 import { CreateCourseInput, UpdateCourseInput } from '../schemas/course.schema';
+import { AppError } from '../errors/AppError';
+import { RbacService } from './rbac.service';
 
 export interface UsuarioLogado {
   userId: string;
-  cargo: 'DEPPI' | 'PROFESSOR' | 'ALUNO' | 'ADMIN';
+}
+
+const rbacService = new RbacService();
+
+function ehAlunoSemAcessoAdministrativo(cargos: string[]) {
+  const ehAluno = cargos.includes('ALUNO');
+  const temAcessoAdministrativo = cargos.some((cargo) =>
+    ['PROFESSOR', 'DEPPI', 'ADMIN'].includes(cargo)
+  );
+
+  if (!ehAluno && !temAcessoAdministrativo) {
+    throw new AppError("Usuário sem perfil autorizado para consultar cursos.", 403);
+  }
+
+  return ehAluno && !temAcessoAdministrativo;
 }
 
 function validarVagas(vagas: number) {
@@ -20,15 +36,16 @@ export class CourseService {
     validarVagas(dadosCurso.vagas);
     validarCargaHoraria(dadosCurso.carga_horaria);
 
+    const cargosUsuario = await rbacService.obterCargos(usuarioLogado.userId);
     const instituicaoExiste = await prisma.instituicao.findUnique({
       where: { id: dadosCurso.fkInstituicao }
     });
     
     if (!instituicaoExiste) {
-      throw new Error("Instituição não encontrada.");
+      throw new AppError("Instituição não encontrada.", 404);
     }
 
-    const status: StatusCurso = usuarioLogado.cargo === 'DEPPI' ? 'ANDAMENTO' : 'ANALISE';
+    const status: StatusCurso = cargosUsuario.includes('DEPPI') ? 'ANDAMENTO' : 'ANALISE';
 
     return await prisma.curso.create({
       data: {
@@ -47,7 +64,9 @@ export class CourseService {
   }
 
   async readCourses(usuarioLogado: UsuarioLogado) {
-    const filtroStatus = usuarioLogado.cargo === 'ALUNO'
+    const cargosUsuario = await rbacService.obterCargos(usuarioLogado.userId);
+    const alunoSemPermissaoDeGestao = ehAlunoSemAcessoAdministrativo(cargosUsuario);
+    const filtroStatus = alunoSemPermissaoDeGestao
       ? { status: 'ANDAMENTO' as StatusCurso }
       : {};
 
@@ -68,6 +87,8 @@ export class CourseService {
   }
 
   async readCourseById(id: string, usuarioLogado: UsuarioLogado) {
+    const cargosUsuario = await rbacService.obterCargos(usuarioLogado.userId);
+    const alunoSemPermissaoDeGestao = ehAlunoSemAcessoAdministrativo(cargosUsuario);
     const curso = await prisma.curso.findUnique({
       where: { id },
       include: {
@@ -76,10 +97,10 @@ export class CourseService {
       }
     });
 
-    if (!curso) throw new Error("Curso não encontrado.");
+    if (!curso) throw new AppError("Curso não encontrado.", 404);
 
-    if (usuarioLogado.cargo === 'ALUNO' && curso.status !== 'ANDAMENTO') {
-      throw new Error("Este curso não está disponível para visualização.");
+    if (alunoSemPermissaoDeGestao && curso.status !== 'ANDAMENTO') {
+      throw new AppError("Este curso não está disponível para visualização.", 403);
     }
 
     return {
@@ -101,7 +122,7 @@ export class CourseService {
     });
 
 
-    if (!cursoExiste) throw new Error("Curso não encontrado.");
+    if (!cursoExiste) throw new AppError("Curso não encontrado.", 404);
 
     if (dadosAtualizados.vagas !== undefined) {
       validarVagas(dadosAtualizados.vagas);
@@ -113,24 +134,16 @@ export class CourseService {
 
     if (dadosAtualizados.carga_horaria !== undefined) validarCargaHoraria(dadosAtualizados.carga_horaria);
 
-    if (dadosAtualizados.status && usuarioLogado.cargo !== 'DEPPI') {
-      throw new Error("Apenas o DEPPI pode alterar o status de um curso manualmente.");
+    if (dadosAtualizados.status !== undefined) {
+      const permissoesUsuario = await rbacService.obterPermissoes(usuarioLogado.userId);
+      if (!permissoesUsuario.includes('GERENCIAR_CURSO')) {
+        throw new AppError("Você não tem permissão para alterar o status do curso.", 403);
+      }
     }
-
-    const dadosAtuais = await prisma.curso.findUnique({ where: { id }});
 
     return await prisma.curso.update({
       where: { id },
-      data: { 
-        nome: dadosAtualizados.nome! ?? dadosAtuais?.nome,
-        carga_horaria: dadosAtualizados.carga_horaria! ?? dadosAtuais?.carga_horaria,
-        vagas: dadosAtualizados.vagas! ?? dadosAtuais?.vagas,
-        dataInicio:dadosAtualizados.dataInicio! ?? dadosAtuais?.dataInicio,
-        dataFim:dadosAtualizados.dataFim! ?? dadosAtuais?.dataFim,
-        horarioInicio: dadosAtualizados.horarioInicio! ?? dadosAtuais?.horarioInicio,
-        horarioFim:dadosAtualizados.horarioFim! ?? dadosAtuais?.horarioFim,
-        status: dadosAtualizados.status as StatusCurso ?? dadosAtuais?.status
-      },
+      data: dadosAtualizados,
       include: { Instituicao: true }
     });
   }
@@ -141,7 +154,7 @@ export class CourseService {
       include: { inscricao: { select: { id: true } } }
     });
 
-    if (!cursoExiste) throw new Error("Curso não encontrado.");
+    if (!cursoExiste) throw new AppError("Curso não encontrado.", 404);
 
     if (cursoExiste.inscricao.length > 0) {
       throw new Error("Não é possível deletar um curso que já possui inscrições.");
