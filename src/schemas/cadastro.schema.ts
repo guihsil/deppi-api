@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const cadastroSchema = z.object({
+const cadastroBaseSchema = z.object({
   // Dados do usuário
   nome: z.string().min(3, "Nome deve ter ao menos 3 caracteres"),
   nomeSocial: z.string().optional(),
@@ -27,8 +27,6 @@ export const cadastroSchema = z.object({
     "INDIGENA",
     "NAO_DECLARADO",
   ]),
-  cargo: z.enum(["ALUNO", "PROFESSOR", "ADMIN", "DEPPI"]),
-
   // Dados da identidade
   rg: z.string().min(5, "RG inválido"),
   cpf: z.string().regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/, "CPF inválido"),
@@ -44,10 +42,20 @@ export const cadastroSchema = z.object({
   secaoEleitoral: z.string().min(1, "Seção eleitoral é obrigatória"),
   ufTitulo: z.string().length(2, "UF deve ter 2 letras"),
 
-  // Código de Usuário (opcional — se omitida, é gerada automaticamente)
+  // Código do aluno (opcional — se omitido, é gerado automaticamente)
   matricula: z.string().optional(),
-  siape: z.string().optional(),
 });
+
+export const cadastroSchema = z.discriminatedUnion("cargo", [
+  cadastroBaseSchema.extend({
+    cargo: z.literal("ALUNO"),
+    siape: z.string().trim().optional(),
+  }),
+  cadastroBaseSchema.extend({
+    cargo: z.literal("PROFESSOR"),
+    siape: z.string().trim().min(1, "SIAPE é obrigatório para professor"),
+  }),
+]);
 
 export const promoverSchema = z.object({
   id: z.string().uuid("ID inválido"),

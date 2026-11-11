@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { ZodError } from "zod";
 import { prisma } from "../lib/prisma"; // Ajuste o caminho se necessário
+import { AppError } from "../errors/AppError";
+import { Prisma } from "../../generated/prisma/client";
 import { 
   criarProfessorSchema, 
   atualizarProfessorSchema, 
@@ -12,14 +14,46 @@ export const criarProfessor = async (req: Request, res: Response) => {
   try {
     const dados = criarProfessorSchema.parse(req.body);
 
-    const novoProfessor = await prisma.professor.create({
-      data: dados,
+    const novoProfessor = await prisma.$transaction(async (tx) => {
+      const usuario = await tx.usuario.findUnique({
+        where: { id: dados.fkUsuario },
+        select: { id: true },
+      });
+      if (!usuario) throw new AppError("Usuário não encontrado", 404);
+
+      const cargoProfessor = await tx.cargo.findFirst({
+        where: { cargo: "PROFESSOR" },
+        select: { id: true },
+      });
+      if (!cargoProfessor) {
+        throw new AppError("Cargo PROFESSOR não encontrado no sistema", 500);
+      }
+
+      const professor = await tx.professor.create({ data: dados });
+
+      await tx.usuario.update({
+        where: { id: usuario.id },
+        data: { cargos: { connect: { id: cargoProfessor.id } } },
+      });
+
+      return professor;
     });
 
     return res.status(201).json(novoProfessor);
   } catch (error) {
     if (error instanceof ZodError) return res.status(400).json({ erros: error.issues });
-    return res.status(500).json({ erro: "Erro ao criar professor", detalhes: error });
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({ erro: error.message });
+    }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return res.status(409).json({
+        erro: "Já existe um professor com o SIAPE, e-mail SIAPE ou usuário informado",
+      });
+    }
+    return res.status(500).json({ erro: "Erro ao criar professor" });
   }
 };
 

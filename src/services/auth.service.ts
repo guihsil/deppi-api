@@ -6,34 +6,47 @@ import { CadastroInput } from "../schemas/cadastro.schema";
 import { LoginInput } from "../schemas/login.schema";
 import { createUser } from "./register.service";
 
-export async function cadastrarAluno(data: CadastroInput) {
+function ensureJwtSecretConfigured() {
+  if (!process.env.JWT_SECRET) {
+    throw new AppError("Configuração de segurança ausente.", 500);
+  }
+}
+
+export async function cadastrarAluno(
+  data: Extract<CadastroInput, { cargo: "ALUNO" }>,
+) {
+  ensureJwtSecretConfigured();
   const aluno = await createUser(data);
-  const token = generateToken(aluno!.usuario.id, aluno!.aluno!.id, ["ALUNO"]);
+  const token = generateToken(aluno.usuario.id, aluno.aluno.id, ["ALUNO"]);
 
   return {
     token,
     usuario: {
-      id: aluno!.usuario.id,
-      nome: aluno!.usuario.nome,
-      email: aluno!.usuario.emailInstitucional,
-      matricula: aluno?.aluno!.matricula,
+      id: aluno.usuario.id,
+      nome: aluno.usuario.nome,
+      email: aluno.usuario.emailInstitucional,
+      matricula: aluno.aluno.matricula,
     },
   };
 }
 
-export async function cadastrarProfessor(data: CadastroInput) {
+export async function cadastrarProfessor(
+  data: Extract<CadastroInput, { cargo: "PROFESSOR" }>,
+) {
+  ensureJwtSecretConfigured();
   const professor = await createUser(data);
-  const token = generateToken(professor!.usuario.id, professor!.professor!.id, [
+  const token = generateToken(professor.usuario.id, professor.professor.id, [
     "PROFESSOR",
   ]);
 
   return {
     token,
     usuario: {
-      id: professor?.usuario.id,
-      nome: professor?.usuario.nome,
-      email: professor?.usuario.emailInstitucional,
-      matricula: professor?.professor!.siape,
+      id: professor.usuario.id,
+      nome: professor.usuario.nome,
+      email: professor.usuario.emailInstitucional,
+      professorId: professor.professor.id,
+      siape: professor.professor.siape,
     },
   };
 }

@@ -5,7 +5,7 @@ import { verificarPermissao } from "../middleware/rbac.middleware";
 
 const instituicaoRoutes = Router();
 
-instituicaoRoutes.get("/", authMiddleware, verificarPermissao(["DEPPI", "ADMIN"]), listarInstituicoes);
+instituicaoRoutes.get("/", authMiddleware, verificarPermissao(["DEPPI", "ADMIN", "CRIAR_CURSO"]), listarInstituicoes);
 
 instituicaoRoutes.get("/:id", authMiddleware, verificarPermissao(["DEPPI", "ADMIN"]), instituicao);
 

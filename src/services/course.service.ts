@@ -1,21 +1,10 @@
 import { StatusCurso } from '../../generated/prisma/client';
 import { prisma } from '../lib/prisma';
-import { UpdateCourseInput } from '../schemas/course.schema';
+import { CreateCourseInput, UpdateCourseInput } from '../schemas/course.schema';
 
 export interface UsuarioLogado {
   userId: string;
   cargo: 'DEPPI' | 'PROFESSOR' | 'ALUNO' | 'ADMIN';
-}
-
-export interface CriarCursoDTO {
-  nome: string;
-  carga_horaria: number;
-  vagas: number;
-  dataInicio: string;
-  dataFim: string;
-  horarioInicio: string;
-  horarioFim: string;
-  fkInstituicao: string;
 }
 
 function validarVagas(vagas: number) {
@@ -27,7 +16,7 @@ function validarCargaHoraria(ch: number) {
 }
 
 export class CourseService {
-  async createCourse(dadosCurso: CriarCursoDTO, usuarioLogado: UsuarioLogado) {
+  async createCourse(dadosCurso: CreateCourseInput, usuarioLogado: UsuarioLogado) {
     validarVagas(dadosCurso.vagas);
     validarCargaHoraria(dadosCurso.carga_horaria);
 
@@ -46,10 +35,10 @@ export class CourseService {
         nome: dadosCurso.nome,
         carga_horaria: dadosCurso.carga_horaria,
         vagas: dadosCurso.vagas,
-        dataInicio: new Date(dadosCurso.dataInicio),
-        dataFim: new Date(dadosCurso.dataFim),
-        horarioInicio: new Date(dadosCurso.horarioInicio),
-        horarioFim: new Date(dadosCurso.horarioFim),
+        dataInicio: dadosCurso.dataInicio,
+        dataFim: dadosCurso.dataFim,
+        horarioInicio: dadosCurso.horarioInicio,
+        horarioFim: dadosCurso.horarioFim,
         fkInstituicao: dadosCurso.fkInstituicao,
         status,
       },

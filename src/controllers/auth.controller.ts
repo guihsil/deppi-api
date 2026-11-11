@@ -1,8 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { cadastroSchema } from "../schemas/cadastro.schema";
 import { loginSchema } from "../schemas/login.schema";
-import { cadastrarAluno, login } from "../services/auth.service";
-import { AppError } from "../errors/AppError";
+import {
+  cadastrarAluno,
+  cadastrarProfessor,
+  login,
+} from "../services/auth.service";
 
 export async function cadastrar(req: Request, res: Response, next: NextFunction) {
   try {
@@ -17,7 +20,9 @@ export async function cadastrar(req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    const resultado = await cadastrarAluno(parsed.data);
+    const resultado = parsed.data.cargo === "ALUNO"
+      ? await cadastrarAluno(parsed.data)
+      : await cadastrarProfessor(parsed.data);
 
     res.status(201).json({
       mensagem: "Cadastro realizado com sucesso!",
