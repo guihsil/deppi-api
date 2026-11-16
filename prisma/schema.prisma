@@ -29,6 +29,7 @@ model Usuario {
   alunos    Aluno?
   professor Professor?
   cargos    Cargo[]
+  cursosCriados Curso[] @relation("CriadorCurso")
 
   tituloEleitor TituloEleitor?
 
@@ -140,6 +141,9 @@ model Curso {
   horarioInicio DateTime    @map("horario_inicio") @db.Time()
   horarioFim    DateTime    @map("horario_fim") @db.Time()
 
+  fkCriador String? @map("fk_criador")
+  criador Usuario? @relation("CriadorCurso", fields: [fkCriador], references: [id], onDelete: SetNull)
+
   professores AlocacaoProfessor[]
   diasSemana  DiasSemana[]        @map("dias_semana")
   inscricao   Inscricao[]
@@ -150,6 +154,7 @@ model Curso {
   capaID String? @unique
   Capa   Capa?   @relation(fields: [capaID], references: [id])
 
+  @@index([fkCriador, nome, id])
   @@map("curso")
 }
 

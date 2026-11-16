@@ -49,6 +49,7 @@ export class CourseService {
 
     return await prisma.curso.create({
       data: {
+        fkCriador: usuarioLogado.userId,
         nome: dadosCurso.nome,
         carga_horaria: dadosCurso.carga_horaria,
         vagas: dadosCurso.vagas,

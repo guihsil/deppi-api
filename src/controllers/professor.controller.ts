@@ -2,6 +2,25 @@ import { Request, Response } from "express";
 import { ZodError } from "zod";
 import { prisma } from "../lib/prisma"; // Ajuste o caminho se necessário
 import { AppError } from "../errors/AppError";
+import { professorCursosQuerySchema } from "../schemas/professor-cursos.schema";
+import { listarCursosDoProfessor } from "../services/professor-cursos.service";
+
+export const listarMeusCursos = async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.userId) throw new AppError("Usuário não autenticado.", 401);
+    const query = professorCursosQuerySchema.parse(req.query);
+    return res.status(200).json(await listarCursosDoProfessor(req.user.userId, query));
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ erro: "Parâmetros de consulta inválidos.", detalhes: error.issues });
+    }
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({ erro: error.message });
+    }
+    console.error("Erro ao listar cursos do professor:", error);
+    return res.status(500).json({ erro: "Erro ao listar cursos do professor." });
+  }
+};
 import { Prisma } from "../../generated/prisma/client";
 import { 
   criarProfessorSchema, 

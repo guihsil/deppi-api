@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { 
+  listarMeusCursos,
   criarProfessor, 
   listarProfessores, 
   buscarProfessorPorId, 
@@ -11,6 +12,9 @@ import { authMiddleware } from "../middleware/auth.middleware";
 import { verificarPermissao } from "../middleware/rbac.middleware";
 
 export const professorRoutes = Router();
+
+// Listar meus cursos
+professorRoutes.get("/professores/me/cursos", authMiddleware, listarMeusCursos);
 
 // Criar
 professorRoutes.post(
