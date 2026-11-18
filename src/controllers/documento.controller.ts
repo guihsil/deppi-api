@@ -7,10 +7,9 @@ import {
 import {
   enviarDocumento,
   listarDocumentosDaInscricao,
-  buscarDocumento,
+  obterUrlDocumento,
   removerDocumento,
 } from "../services/documento.service";
-import { storageService } from "../storage/storageDocuments";
 
 export async function enviar(req: Request, res: Response, next: NextFunction) {
   try {
@@ -44,7 +43,7 @@ export async function enviar(req: Request, res: Response, next: NextFunction) {
       categoria: body.data.categoria,
     });
 
-    res.status(201).json({ mensagem: "Documento enviado com sucesso", documento });
+    res.set("Cache-Control", "no-store").status(201).json({ mensagem: "Documento enviado com sucesso", documento });
   } catch (error) {
     next(error);
   }
@@ -65,7 +64,7 @@ export async function listarDaInscricao(req: Request, res: Response, next: NextF
     }
 
     const documentos = await listarDocumentosDaInscricao(params.data.id, usuarioId);
-    res.status(200).json({ mensagem: "Documentos encontrados", documentos });
+    res.set("Cache-Control", "no-store").status(200).json({ mensagem: "Documentos encontrados", documentos });
   } catch (error) {
     next(error);
   }
@@ -92,12 +91,12 @@ export async function visualizar(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const documento = await buscarDocumento(
+    const caminho = await obterUrlDocumento(
       params.data.id,
       usuarioId
     );
 
-    res.redirect(documento.caminho);
+    res.set("Cache-Control", "no-store").redirect(caminho);
 
   } catch (error) {
     next(error);

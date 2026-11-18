@@ -16,10 +16,10 @@ export class CourseCoverController {
     async show(req: Request, res: Response) {
         const service = new ShowCoverService();
 
-        const filePath = await service.execute({
+        const url = await service.execute({
             cursoID: String(req.params.id),
         });
 
-        return res.send(filePath);
+        return res.set("Cache-Control", "no-store").send(url);
     }
 }

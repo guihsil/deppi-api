@@ -1,7 +1,7 @@
-import path from "path";
 import { AppError } from "../errors/AppError";
 import { prisma } from "../lib/prisma";
 import { storageService } from "../storage/storageDocuments";
+import { resolverReferenciaCapa } from "../storage/referenciaArquivo";
 
 interface Cover {
     cursoID: string;
@@ -24,33 +24,38 @@ export class UploadCoverService {
             throw new AppError("Curso não encontrado");
         }
 
-        const subpasta = "covers";
-        const { nomeArquivo, caminho } = await storageService.salvar(
+        const bucket = storageService.getBucketImagem();
+        const { nomeArquivo, chave } = await storageService.salvar(
             file.buffer,
             file.originalname,
-            subpasta,
+            "covers",
+            bucket,
+            file.mimetype,
         );
 
-        const uploadedCover = await prisma.capa.create({
-            data: {
-                nomeArquivo,
-                nomeOriginal: file.originalname,
-                mimeType: file.mimetype,
-                size: file.size,
-                path: caminho
-            },
-        });
-
-        await prisma.curso.update({
-            where: {
-                id: cursoID,
-            },
-            data: {
-                Capa: {
-                    connect: { id: uploadedCover.id },
+        try {
+            await prisma.curso.update({
+                where: { id: cursoID },
+                data: {
+                    Capa: {
+                        create: {
+                            nomeArquivo,
+                            nomeOriginal: file.originalname,
+                            mimeType: file.mimetype,
+                            size: file.size,
+                            path: storageService.getUrlPublica(chave, bucket),
+                        },
+                    },
                 },
-            },
-        });
+            });
+        } catch (error) {
+            try {
+                await storageService.remover(chave, bucket);
+            } catch {
+                console.error("Falha na limpeza de upload de capa", { cursoID, nomeArquivo });
+            }
+            throw error;
+        }
     }
 }
 
@@ -73,6 +78,9 @@ export class ShowCoverService {
             throw new AppError("Imagem não encontrada");
         }
 
-        return path.resolve(curso.Capa.path);
+        const { chave, bucket } = resolverReferenciaCapa(curso.Capa);
+        const caminho = (await storageService.assinarURLs([chave], bucket)).get(chave);
+        if (!caminho) throw new AppError("Arquivo da capa indisponível.", 404);
+        return caminho;
     }
 }

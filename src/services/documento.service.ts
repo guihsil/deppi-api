@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { AppError } from "../errors/AppError";
 import { storageService } from "../storage/storageDocuments";
+import { resolverReferenciaDocumento } from "../storage/referenciaArquivo";
 import { TIPOS_PERMITIDOS } from "../middleware/upload.middleware";
 import { RbacService } from "./rbac.service";
 import type { CategoriaDocumento } from "../../generated/prisma/client";
@@ -54,25 +55,39 @@ export async function enviarDocumento({
   }
 
   const subpasta = `inscricoes/${inscricaoId}`;
-  const { nomeArquivo, caminho } = await storageService.salvar(
+  const bucket = storageService.getBucketDocumentos();
+  const { nomeArquivo, chave } = await storageService.salvar(
     file.buffer,
     file.originalname,
     subpasta,
-    storageService.getBucketDocumentos(),
+    bucket,
     file.mimetype
   );
 
-  return prisma.documento.create({
-    data: {
-      nomeOriginal: file.originalname,
-      nomeArquivo,
-      caminho,
-      tipoMime: file.mimetype,
-      tamanho: file.size,
-      categoria: categoria ?? "OUTRO",
-      fkInscricao: inscricaoId,
-    },
-  });
+  try {
+    const caminho = (await storageService.assinarURLs([chave], bucket)).get(chave);
+    if (!caminho) throw new AppError("Não foi possível gerar o link do documento.", 502);
+
+    const documento = await prisma.documento.create({
+      data: {
+        nomeOriginal: file.originalname,
+        nomeArquivo,
+        caminho: chave,
+        tipoMime: file.mimetype,
+        tamanho: file.size,
+        categoria: categoria ?? "OUTRO",
+        fkInscricao: inscricaoId,
+      },
+    });
+    return { ...documento, caminho };
+  } catch (error) {
+    try {
+      await storageService.remover(chave, bucket);
+    } catch {
+      console.error("Falha na limpeza de upload de documento", { inscricaoId, nomeArquivo });
+    }
+    throw error;
+  }
 }
 
 export async function listarDocumentosDaInscricao(
@@ -81,13 +96,31 @@ export async function listarDocumentosDaInscricao(
 ) {
   await verificarPropriedadeOuPermissao(inscricaoId, usuarioId);
 
-  return prisma.documento.findMany({
+  const documentos = await prisma.documento.findMany({
     where: { fkInscricao: inscricaoId },
     orderBy: { criadoEm: "desc" },
   });
+
+  const referencias = documentos.map(documento => {
+    try {
+      return resolverReferenciaDocumento(documento);
+    } catch (error) {
+      if (!(error instanceof AppError && error.statusCode === 422)) throw error;
+      return null;
+    }
+  });
+  const caminhos = referencias.flatMap(referencia => referencia ? [referencia.chave] : []);
+  const urls = caminhos.length
+    ? await storageService.assinarURLs(caminhos, storageService.getBucketDocumentos())
+    : new Map<string, string>();
+
+  return documentos.map((documento, index) => {
+    const referencia = referencias[index];
+    return { ...documento, caminho: referencia ? urls.get(referencia.chave) ?? null : null };
+  });
 }
 
-export async function buscarDocumento(documentoId: string, usuarioId: string) {
+async function buscarDocumento(documentoId: string, usuarioId: string) {
   const documento = await prisma.documento.findUnique({ where: { id: documentoId } });
   if (!documento) throw new AppError("Documento não encontrado", 404);
 
@@ -95,8 +128,17 @@ export async function buscarDocumento(documentoId: string, usuarioId: string) {
   return documento;
 }
 
+export async function obterUrlDocumento(documentoId: string, usuarioId: string) {
+  const documento = await buscarDocumento(documentoId, usuarioId);
+  const { chave, bucket } = resolverReferenciaDocumento(documento);
+  const caminho = (await storageService.assinarURLs([chave], bucket)).get(chave);
+  if (!caminho) throw new AppError("Arquivo do documento indisponível.", 404);
+  return caminho;
+}
+
 export async function removerDocumento(documentoId: string, usuarioId: string) {
   const documento = await buscarDocumento(documentoId, usuarioId);
-  await storageService.remover(documento.caminho);
-  await prisma.documento.delete({ where: { id: documentoId } });
+  const { chave, bucket } = resolverReferenciaDocumento(documento);
+  await storageService.remover(chave, bucket);
+  await prisma.documento.deleteMany({ where: { id: documentoId } });
 }
